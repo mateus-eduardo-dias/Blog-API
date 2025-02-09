@@ -12,31 +12,37 @@ const app = express()
 const PORT = 8080
 
 const { Client } = pg
-const client = new Client({connectionString:process.env.DB_STR})
+let client = new Client({connectionString:process.env.DB_STR})
 await client.connect()
-const schemaUserJson = JSON.stringify(['username', 'password'])
+const schemaUserJson = JSON.stringify(['username', 'password', 'iat', 'nbf', 'exp', 'iss'])
+const schemaUserSimplifiedJson = JSON.stringify(['username', 'password'])
+const schemaBlogJson = JSON.stringify(['title', 'content', 'username'])
+
+async function connectionError(err) {
+    if (err.message == 'Connection terminated unexpectedly') {
+        console.log("connection lost")
+        client = new Client({connectionString:process.env.DB_STR})
+        await client.connect()
+        client.on('error', (err) => connectionError(err))
+        console.log("reconnected")
+    }
+}
+
+client.on('error', (err) => connectionError(err))
+
 
 app.use(express.json())
 
-app.get('/blogs', async (req, res) => { // READ POST
-    let limit = 10
-    let page = 1
-    if (req.get('information_length')) {
-        limit = Number(req.headers["information_length"])
+app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
+    /* Body expected
+    {
+        "username": "...",
+        "password": "..."
     }
-    if (req.get('page_number')) {
-        page = Number(req.headers["page_number"])
-    }
-    const offsetVal = (page - 1) * limit
-    const result = (await client.query(`SELECT * FROM blogs LIMIT ${limit} OFFSET ${offsetVal}`)).rows
-    res.contentType('application/json')
-    res.end(JSON.stringify(result))
-})
-
-app.post('/user', async (req, res) => { // CREATE ACCOUNT
+    */
     res.contentType('application/json')
     const body = req.body
-    if (JSON.stringify(Object.keys(body)) != schemaUserJson) {
+    if (JSON.stringify(Object.keys(body)) != schemaUserSimplifiedJson) {
         res.statusCode = 400
         res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
         return;
@@ -51,19 +57,100 @@ app.post('/user', async (req, res) => { // CREATE ACCOUNT
         } catch {
             res.statusCode = 500
             res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            return;
+            throw err
         }
-        
-        const token = jwt.sign(JSON.stringify(body), process.env.JWT_KEY)
+        const agora = Math.floor(Date.now() / 1000)
+        const payload = {
+            "username": body.username,
+            "password": body.password,
+            "iat": agora,
+            "nbf": agora,
+            "exp": process.env.JWT_EXP,
+            "iss": process.env.JWT_ISSUER
+        }
+        const token = jwt.sign(JSON.stringify(payload), process.env.JWT_KEY)
+        const exp = jwt.decode(token).exp
+        try {
+            await dbc.saveToken(token, exp, client)
+        } catch (err){
+            res.statusCode = 500
+            res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
+            throw err
+        }
         res.statusCode = 200
         res.end(JSON.stringify({'status':true, 'token':token}))
         return;
     }
 })
 
-app.post('/blogs', (req, res) => { // CREATE POSTS
+app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
+    /* Body expected
+    {
+        "username": "...",
+        "password": "..."
+    }
+    */
     res.contentType('application/json')
     const body = req.body
+    if (JSON.stringify(Object.keys(body)) != schemaUserSimplifiedJson) {
+        res.statusCode = 400
+        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
+        return;
+    }
+    if (!(await dbc.userExists({username: body.username}, client))) {
+        res.statusCode = 404
+        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'User not found', 'code':7}))
+        return;
+    } else if (!(await dbc.userExists(body, client))) {
+        res.statusCode = 401
+        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Incorrect password', 'code':8}))
+        return;
+    } else {
+        const agora = Math.floor(Date.now() / 1000)
+        const payload = {
+            "username": body.username,
+            "password": body.password,
+            "iat": agora,
+            "nbf": agora,
+            "exp": process.env.JWT_EXP,
+            "iss": process.env.JWT_ISSUER
+        }
+        const token = jwt.sign(JSON.stringify(payload), process.env.JWT_KEY)
+        const exp = jwt.decode(token).exp
+        try {
+            await dbc.saveToken(token, exp, client)
+        } catch {
+            res.statusCode = 500
+            res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
+            throw err
+        }
+        res.statusCode = 200
+        res.end(JSON.stringify({'status':true, 'token':token}))
+        return;
+    }
+})
+
+app.post('/blogs', (req, res) => { // POST - CREATE
+    /* Body expected
+    {
+        "title": "...",
+        "content": "...",
+        "username": "..."
+    }
+    */
+
+    /* Header expected
+    {
+        "Authorization": "Bearer <JWT Token>"
+    }
+    */
+    res.contentType('application/json')
+    const body = req.body
+    if (JSON.stringify(Object.keys(body)) != schemaBlogJson) {
+        res.statusCode = 400
+        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
+        return;
+    }
     const authHeader = req.get('Authorization')
     if (authHeader == undefined) { /* Auth header don't exist */
         res.statusCode = 401
@@ -83,6 +170,15 @@ app.post('/blogs', (req, res) => { // CREATE POSTS
             res.statusCode = 401
             res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
             return;
+        } else if (!(await dbc.searchToken(token))) {
+            res.statusCode = 401
+            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
+            return;
+        }
+        else if (decoded.username != body.username) {
+            res.statusCode = 400
+            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Token has differente information', 'code':6}))
+            return;
         }
         else if (await dbc.userExists(decoded, client)){
             try {
@@ -90,9 +186,8 @@ app.post('/blogs', (req, res) => { // CREATE POSTS
             } catch {
                 res.statusCode = 500
                 res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-                return;
+                throw err
             }
-            
             res.statusCode = 200
             res.end(JSON.stringify({'status':true}))
             return;
@@ -103,6 +198,22 @@ app.post('/blogs', (req, res) => { // CREATE POSTS
         }
     })
 })
+
+app.get('/blogs', async (req, res) => { // POST - READ
+    let limit = 10
+    let page = 1
+    if (req.get('information_length')) {
+        limit = Number(req.headers["information_length"])
+    }
+    if (req.get('page_number')) {
+        page = Number(req.headers["page_number"])
+    }
+    const offsetVal = (page - 1) * limit
+    const result = (await client.query(`SELECT * FROM blogs LIMIT ${limit} OFFSET ${offsetVal}`)).rows
+    res.contentType('application/json')
+    res.end(JSON.stringify(result))
+})
+
 
 app.listen(PORT, () => {
     console.log(`Server on -> Port: ${PORT}`)
