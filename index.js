@@ -4,6 +4,9 @@ const dbc = new DataBaseControl()
 import { User } from "./endpoints/user.js";
 const userCommands = new User()
 
+import { Blog } from "./endpoints/blog.js";
+const blogCommands = new Blog()
+
 import pg from "pg";
 import express from "express"
 import dotenv from "dotenv";
@@ -18,9 +21,7 @@ const PORT = 8080
 const { Client } = pg
 let client = new Client({connectionString:process.env.DB_STR})
 await client.connect()
-const schemaUserJson = JSON.stringify(['username', 'password', 'iat', 'nbf', 'exp', 'iss'])
 
-const schemaBlogJson = JSON.stringify(['title', 'content', 'username'])
 
 async function connectionError(err) {
     if (err.message == 'Connection terminated unexpectedly') {
@@ -63,7 +64,7 @@ app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
     res.end(response.response)
 })
 
-app.post('/blogs', (req, res) => { // POST - CREATE
+app.post('/blogs', async (req, res) => { // POST - CREATE
     /* Body expected
     {
         "title": "...",
@@ -78,61 +79,9 @@ app.post('/blogs', (req, res) => { // POST - CREATE
     }
     */
     res.contentType('application/json')
-    const body = req.body
-    if (JSON.stringify(Object.keys(body)) != schemaBlogJson) {
-        res.statusCode = 400
-        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
-        return;
-    }
-    const authHeader = req.get('Authorization')
-    if (authHeader == undefined) { /* Auth header don't exist */
-        res.statusCode = 401
-        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message':'No authentication was recieved', 'code':1}))
-        return;
-    }
-    const authInfo = authHeader.split(' ')
-    const authType = authInfo[0]
-    if (authType != 'Bearer') { /* Wrong Auth type */
-        res.statusCode = 403
-        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message':'Wrong authentication method was recieved', 'code':2}))
-        return;
-    }
-    const token = authInfo[1]
-    jwt.verify(token, process.env.JWT_KEY, async (err, decoded) => {
-        if (err) {res.statusCode = 401
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
-            return;
-        }
-        if (JSON.stringify(Object.keys(decoded)) != schemaUserJson) {
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
-            return;
-        } else if (!(await dbc.searchToken(token, client))) {
-            res.statusCode = 401
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
-            return;
-        } else if (decoded.username != body.username) {
-            res.statusCode = 400
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Token has differente information', 'code':6}))
-            return;
-        }
-        else if (await dbc.userExists(decoded, client)){
-            try {
-                await dbc.createPost(body, client)
-            } catch {
-                res.statusCode = 500
-                res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-                console.log(err)
-                return;
-            }
-            res.statusCode = 200
-            res.end(JSON.stringify({'status':true}))
-            return;
-        } else {
-            res.statusCode = 404
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - User not found', 'code':5}))
-            return;
-        }
-    })
+    const response = await blogCommands.createPost(req.body, client, dbc, jwt, req.get('Authorization'))
+    res.statusCode = response.code
+    res.end(response.response)
 })
 
 app.get('/blogs', async (req, res) => { // POST - READ

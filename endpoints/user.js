@@ -1,4 +1,3 @@
-
 export class User{
     constructor() {
         this.schemaUserSimplifiedJson = JSON.stringify(['username', 'password'])
