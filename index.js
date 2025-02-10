@@ -1,10 +1,14 @@
 import { DataBaseControl } from "./files/dbc.js";
 const dbc = new DataBaseControl()
 
+import { User } from "./endpoints/user.js";
+const userCommands = new User()
+
 import pg from "pg";
 import express from "express"
 import dotenv from "dotenv";
 import JsonWebTokenError from "jsonwebtoken";
+
 const jwt = JsonWebTokenError
 
 dotenv.config()
@@ -15,7 +19,7 @@ const { Client } = pg
 let client = new Client({connectionString:process.env.DB_STR})
 await client.connect()
 const schemaUserJson = JSON.stringify(['username', 'password', 'iat', 'nbf', 'exp', 'iss'])
-const schemaUserSimplifiedJson = JSON.stringify(['username', 'password'])
+
 const schemaBlogJson = JSON.stringify(['title', 'content', 'username'])
 
 async function connectionError(err) {
@@ -41,50 +45,9 @@ app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
     }
     */
     res.contentType('application/json')
-    const body = req.body
-    console.log(body)
-    if (JSON.stringify(Object.keys(body)) != schemaUserSimplifiedJson) {
-        res.statusCode = 400
-        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
-        console.log(body)
-        return;
-    }
-    if (await dbc.userExists({username:body.username}, client))  {
-        res.statusCode = 409
-        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'User exists', 'code':11}))
-        return;
-    } else {
-        try {
-            await dbc.createUser(body, client)
-        } catch {
-            res.statusCode = 500
-            res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            console.log(err)
-            return;
-        }
-        const agora = Math.floor(Date.now() / 1000)
-        const exp = agora + Number(process.env.JWT_EXP)
-        const payload = JSON.stringify({
-            "username": body.username,
-            "password": body.password,
-            "iat": agora,
-            "nbf": agora,
-            "exp": exp,
-            "iss": process.env.JWT_ISSUER
-        })
-        const token = jwt.sign(payload, process.env.JWT_KEY)
-        try {
-            await dbc.saveToken(token, exp, client)
-        } catch (err){
-            res.statusCode = 500
-            res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            console.log(err)
-            return;
-        }
-        res.statusCode = 200
-        res.end(JSON.stringify({'status':true, 'token':token}))
-        return;
-    }
+    const response = await userCommands.createUser(req.body, client, dbc, jwt)
+    res.statusCode = response.code
+    res.end(response.response)
 })
 
 app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
@@ -95,43 +58,9 @@ app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
     }
     */
     res.contentType('application/json')
-    const body = req.body
-    if (JSON.stringify(Object.keys(body)) != schemaUserSimplifiedJson) {
-        res.statusCode = 400
-        res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
-        return;
-    }
-    if (!(await dbc.userExists({username: body.username}, client))) {
-        res.statusCode = 404
-        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'User not found', 'code':7}))
-        return;
-    } else if (!(await dbc.userExists(body, client))) {
-        res.statusCode = 401
-        res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Incorrect password', 'code':8}))
-        return;
-    } else {
-        const agora = Math.floor(Date.now() / 1000)
-        const exp = agora + Number(process.env.JWT_EXP)
-        const payload = JSON.stringify({
-            "username": body.username,
-            "password": body.password,
-            "iat": agora,
-            "nbf": agora,
-            "exp": exp,
-            "iss": process.env.JWT_ISSUER
-        })
-        const token = jwt.sign(payload, process.env.JWT_KEY)
-        try {
-            await dbc.saveToken(token, exp, client)
-        } catch {
-            res.statusCode = 500
-            res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            throw err
-        }
-        res.statusCode = 200
-        res.end(JSON.stringify({'status':true, 'token':token}))
-        return;
-    }
+    const response = await userCommands.enterUser(req.body, client, dbc, jwt)
+    res.statusCode = response.code
+    res.end(response.response)
 })
 
 app.post('/blogs', (req, res) => { // POST - CREATE
