@@ -4,8 +4,7 @@
   "description": "Uma API para Blog",
   "main": "index.js",
   "scripts": {
-    "start:dev": "node .",
-    "test": "node test.js"
+    "start:dev": "node ."
   },
   "author": "Mateus",
   "license": "Apache-2.0",

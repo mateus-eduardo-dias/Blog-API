@@ -42,9 +42,11 @@ app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
     */
     res.contentType('application/json')
     const body = req.body
+    console.log(body)
     if (JSON.stringify(Object.keys(body)) != schemaUserSimplifiedJson) {
         res.statusCode = 400
         res.end(JSON.stringify({'error': 'REQUEST_FAILURE', 'message': 'Invalid information or pattern recieved', 'code':10}))
+        console.log(body)
         return;
     }
     if (await dbc.userExists({username:body.username}, client))  {
@@ -57,25 +59,27 @@ app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
         } catch {
             res.statusCode = 500
             res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            throw err
+            console.log(err)
+            return;
         }
         const agora = Math.floor(Date.now() / 1000)
-        const payload = {
+        const exp = agora + Number(process.env.JWT_EXP)
+        const payload = JSON.stringify({
             "username": body.username,
             "password": body.password,
             "iat": agora,
             "nbf": agora,
-            "exp": process.env.JWT_EXP,
+            "exp": exp,
             "iss": process.env.JWT_ISSUER
-        }
-        const token = jwt.sign(JSON.stringify(payload), process.env.JWT_KEY)
-        const exp = jwt.decode(token).exp
+        })
+        const token = jwt.sign(payload, process.env.JWT_KEY)
         try {
             await dbc.saveToken(token, exp, client)
         } catch (err){
             res.statusCode = 500
             res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-            throw err
+            console.log(err)
+            return;
         }
         res.statusCode = 200
         res.end(JSON.stringify({'status':true, 'token':token}))
@@ -107,16 +111,16 @@ app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
         return;
     } else {
         const agora = Math.floor(Date.now() / 1000)
-        const payload = {
+        const exp = agora + Number(process.env.JWT_EXP)
+        const payload = JSON.stringify({
             "username": body.username,
             "password": body.password,
             "iat": agora,
             "nbf": agora,
-            "exp": process.env.JWT_EXP,
+            "exp": exp,
             "iss": process.env.JWT_ISSUER
-        }
-        const token = jwt.sign(JSON.stringify(payload), process.env.JWT_KEY)
-        const exp = jwt.decode(token).exp
+        })
+        const token = jwt.sign(payload, process.env.JWT_KEY)
         try {
             await dbc.saveToken(token, exp, client)
         } catch {
@@ -166,27 +170,30 @@ app.post('/blogs', (req, res) => { // POST - CREATE
     }
     const token = authInfo[1]
     jwt.verify(token, process.env.JWT_KEY, async (err, decoded) => {
-        if (err || JSON.stringify(Object.keys(decoded)) != schemaUserJson) {
-            res.statusCode = 401
-            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
-            return;
-        } else if (!(await dbc.searchToken(token))) {
-            res.statusCode = 401
+        if (err) {res.statusCode = 401
             res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
             return;
         }
-        else if (decoded.username != body.username) {
+        if (JSON.stringify(Object.keys(decoded)) != schemaUserJson) {
+            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
+            return;
+        } else if (!(await dbc.searchToken(token, client))) {
+            res.statusCode = 401
+            res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Fake Token', 'code':3}))
+            return;
+        } else if (decoded.username != body.username) {
             res.statusCode = 400
             res.end(JSON.stringify({'error': 'AUTH_FAILURE', 'message': 'Invalid Token - Token has differente information', 'code':6}))
             return;
         }
         else if (await dbc.userExists(decoded, client)){
             try {
-                dbc.createPost(body, client)
+                await dbc.createPost(body, client)
             } catch {
                 res.statusCode = 500
                 res.end(JSON.stringify({'error': 'SERVER_FAILURE', 'message': 'Unknown error when creating', 'code':4}))
-                throw err
+                console.log(err)
+                return;
             }
             res.statusCode = 200
             res.end(JSON.stringify({'status':true}))

@@ -35,7 +35,7 @@ export class DataBaseControl {
         await client.query(`INSERT INTO tokens(token, expireat) VALUES ('${token}', '${exp}')`)
     }
     async searchToken(token, client) {
-        const result = (await client.query(`SELECT * FROM tokens WHERE token = ${token}`)).rows
+        const result = (await client.query(`SELECT * FROM tokens WHERE token = '${token}'`)).rows
         if (result.length > 0) {
             return true
         } else {
