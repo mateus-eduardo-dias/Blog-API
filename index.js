@@ -38,7 +38,7 @@ client.on('error', (err) => connectionError(err))
 
 app.use(express.json())
 
-app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
+app.post('/v1/auth/register', async (req, res) => { // ACCOUNT - CREATE
     /* Body expected
     {
         "username": "...",
@@ -51,7 +51,7 @@ app.post('/auth/register', async (req, res) => { // ACCOUNT - CREATE
     res.end(response.response)
 })
 
-app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
+app.post('/v1/auth/login', async (req, res) => { // ACCOUNT - LOGIN
     /* Body expected
     {
         "username": "...",
@@ -64,7 +64,7 @@ app.post('/auth/login', async (req, res) => { // ACCOUNT - LOGIN
     res.end(response.response)
 })
 
-app.post('/blogs', async (req, res) => { // POST - CREATE
+app.post('/v1/blogs', async (req, res) => { // POST - CREATE
     /* Body expected
     {
         "title": "...",
@@ -84,7 +84,7 @@ app.post('/blogs', async (req, res) => { // POST - CREATE
     res.end(response.response)
 })
 
-app.get('/blogs', async (req, res) => { // POST - READ
+app.get('/v1/blogs', async (req, res) => { // POST - READ
     let limit = 10
     let page = 1
     if (req.get('information_length')) {
