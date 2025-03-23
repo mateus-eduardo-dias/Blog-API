@@ -57,6 +57,8 @@ export default {
             } else {
                 next({'error':true, 'expected':true, 'statusCode': 409, 'info':'User exists', 'code':'I0'})
             }
+        } else if (auth.authType == 'token') {
+            next({'error':true, 'expected':true, 'statusCode': 400, 'info':'Authorization not required', 'code':'A1B'})
         } else {
             next({'error':true, 'expected':true, 'statusCode': 400, 'info':'Auth Type is wrong', 'code':'A3'})
         }

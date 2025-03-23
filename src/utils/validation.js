@@ -39,16 +39,13 @@ export default {
     },
     bodyValidation(body, schema) {
         const activeScheme = bodySchemes[schema]
+        if (activeScheme == undefined) return false
         let equal = true
         for (let i = 0; i < activeScheme.length; i++) {
             if (body[activeScheme[i]] == undefined) {
                 equal = false
             }
         }
-        if (equal) {
-            return true
-        } else {
-            return false
-        }
+        return equal
     }
 }

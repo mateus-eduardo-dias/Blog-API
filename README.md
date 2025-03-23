@@ -27,7 +27,8 @@
     - [POST /api/v1/auth/signup](#post-apiv1authsignup)
     - [GET /api/v1/auth/signin](#get-apiv1authsignin)
   - [Error Handling](#error-handling)
-    - [Unknown Errors](#unknown-errors)
+    - [Server errors](#server-errors)
+    - [Unknown errors](#unknown-errors)
 
 ## About this project
 
@@ -107,7 +108,8 @@ Here's a sheet for all errors you may be facing:
 |Code|Description|Status Code|Cause|
 |----|-----------|---------|-----|
 |A0|Password is incorrect|401|User was found but password is incorrect|
-|A1|Authorization not required (fixed)|400|A Body was expected in the request, but token was recieved|
+|A1|Authorization not required (signin - fixed)|400|A Body was expected in the request, but token was recieved|
+|A1B|Authorization not required (signup - fixed)|400|A Body was expected in the request, but token was recieved|
 |A2|Auth Type is wrong (signin - fixed)|400|A body was expected in the request, but nothing was recieved|
 |A3|Auth Type is wrong (signup - fixed)|400|A body was expected in the request, but nothing was recieved|
 |A4|Auth Type invalid|401|Could not found a body when trying to sign up/in (replaced A1, A2 and A3)|
@@ -120,6 +122,12 @@ Here's a sheet for all errors you may be facing:
 |A10|Token invalid|401|Token is invalid (there are many reasons for that, check https://www.npmjs.com/package/jsonwebtoken#jsonwebtokenerror)|
 |NF0|User not found|404|Could not found a user when trying to sign in|
 |I0|User exists|409|User already exists (sign up error)|
+
+### Server errors
+Errors that aren't expected to happen, but they may happen, you should report to me at mateuseduqueiroz@proton.me
+|Code|Description|HTTP Code|Cause|
+|----|-----------|---------|-----|
+|SE0|Server Error|500|No endpoint for authentication|
 
 ### Unknown errors
 They should not happen, if you see it, report to me at mateuseduqueiroz@proton.me

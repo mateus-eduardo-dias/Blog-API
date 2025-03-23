@@ -12,6 +12,8 @@ export default {
                     next({'error':true, 'expected':true, 'statusCode': 401, 'info':'Auth type invalid', 'code':'A4'})
                 }
                 break;
+            default:
+                next({'error':true, 'expected':true, 'statusCode': 500, 'info':'Server Error', 'code':'SE0'})
         }
     },
     verifyAuthToken(req, res, next) {
