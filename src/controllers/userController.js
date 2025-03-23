@@ -36,7 +36,9 @@ export default {
         }
     },
     async Signup (auth, req, res, next) {
-        if (auth.authType == 'body') {
+        if (auth.error) {
+            next(auth)
+        } else if (auth.authType == 'body') {
             const body = auth.values
             const user = await userSvc.findUser(body.username)
             if (user.rowCount == 0) {
